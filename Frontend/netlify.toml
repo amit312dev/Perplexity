@@ -1,0 +1,14 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # BACKEND_URL is embedded in the frontend bundle on purpose (the browser must call it),
+  # so it is not a real secret and should not fail the secret scan.
+  SECRETS_SCAN_OMIT_KEYS = "BACKEND_URL"
+
+# Single-page app fallback so routes like /login work on refresh
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

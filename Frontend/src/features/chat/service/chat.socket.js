@@ -1,4 +1,5 @@
 import { io } from "socket.io-client";
+import { BACKEND_URL } from "../../../app/config";
 
 let socket = null;
 
@@ -7,7 +8,7 @@ export const initializeSocketConnection = () => {
     return socket;
   }
 
-  socket = io("http://localhost:3000", {
+  socket = io(BACKEND_URL, {
     withCredentials: true,
   });
 
