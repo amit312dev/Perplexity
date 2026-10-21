@@ -24,9 +24,9 @@ const startServer = async () => {
       );
     }
 
-    httpServer.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-    });
+    httpServer.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
+});
   } catch (error) {
     console.error("Unable to start server:", error.message);
     process.exit(1);
