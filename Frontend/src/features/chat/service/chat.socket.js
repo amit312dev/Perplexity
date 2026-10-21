@@ -1,4 +1,8 @@
+
 import { io } from "socket.io-client";
+
+const API_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 let socket = null;
 
@@ -7,15 +11,12 @@ export const initializeSocketConnection = () => {
     return socket;
   }
 
-  socket = io("http://localhost:3000", {
+  socket = io(API_URL, {
     withCredentials: true,
   });
 
   socket.on("connect", () => {
-    console.log(
-      "Connected to socket server:",
-      socket.id
-    );
+    console.log("Connected to socket server:", socket.id);
   });
 
   socket.on("disconnect", () => {
@@ -23,10 +24,7 @@ export const initializeSocketConnection = () => {
   });
 
   socket.on("connect_error", (error) => {
-    console.error(
-      "Socket connection error:",
-      error.message
-    );
+    console.error("Socket connection error:", error.message);
   });
 
   return socket;

@@ -1,22 +1,34 @@
-import axios from 'axios'
+
+import axios from "axios";
 
 const api = axios.create({
-  baseURL: 'http://localhost:3000',
+  baseURL:
+    import.meta.env.VITE_API_URL ||
+    "http://localhost:3000",
   withCredentials: true, // Include cookies in requests
-})
+});
 
-export async function register({email, username, password}){
-    const response = await api.post('/api/auth/register', {email, username, password})
-    return response.data
+export async function register({ email, username, password }) {
+  const response = await api.post("/api/auth/register", {
+    email,
+    username,
+    password,
+  });
+
+  return response.data;
 }
 
-export async function login({email, password}){
-    const response = await api.post('/api/auth/login', {email, password})
-    return response.data
-}   
+export async function login({ email, password }) {
+  const response = await api.post("/api/auth/login", {
+    email,
+    password,
+  });
 
-export async function getMe(){
-    const response = await api.get('/api/auth/me')
-    return response.data
-}       
+  return response.data;
+}
 
+export async function getMe() {
+  const response = await api.get("/api/auth/me");
+
+  return response.data;
+}
