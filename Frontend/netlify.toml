@@ -1,0 +1,5 @@
+[build.environment]
+  # PORT and FRONTEND_URL are backend settings, not secrets. Their plain values
+  # (a port number and the site URL) show up in node_modules and the bundle and
+  # would otherwise make the secrets scanner fail the build.
+  SECRETS_SCAN_OMIT_KEYS = "PORT,FRONTEND_URL"
