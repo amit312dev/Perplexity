@@ -16,6 +16,7 @@
     "@google/generative-ai": "^0.24.1",
     "@langchain/google-genai": "^2.2.0",
     "@langchain/openai": "^1.5.8",
+    "@tavily/core": "^0.7.12",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
@@ -27,6 +28,8 @@
     "mongoose": "^9.9.3",
     "morgan": "^1.11.0",
     "nodemailer": "^9.0.5",
-    "socket.io": "^4.8.3"
+    "openai": "^7.16.0",
+    "socket.io": "^4.8.3",
+    "zod": "^4.6.5"
   }
 }

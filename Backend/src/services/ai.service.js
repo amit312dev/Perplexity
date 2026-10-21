@@ -1,71 +1,211 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// ==========================================
+// GEMINI SETUP
+// ==========================================
+
+const genAI = new GoogleGenerativeAI(
+  process.env.GEMINI_API_KEY
+);
 
 const model = genAI.getGenerativeModel({
   model: "gemini-3.6-flash",
 });
 
-// ==================================================
-// Generate AI Response
-// ==================================================
+// ==========================================
+// CONFIGURATION
+// ==========================================
 
-export async function generateAIResponse(message, messageHistory = []) {
+const MAX_RETRIES = 2;
+const REQUEST_TIMEOUT = 15000;
+
+// ==========================================
+// HELPER: WAIT
+// ==========================================
+
+const wait = (ms) => {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+};
+
+// ==========================================
+// HELPER: RETRYABLE ERROR
+// ==========================================
+
+const isRetryableError = (error) => {
+  return (
+    error?.status === 500 ||
+    error?.status === 502 ||
+    error?.status === 503 ||
+    error?.status === 504
+  );
+};
+
+// ==========================================
+// GENERATE AI RESPONSE
+// ==========================================
+
+export const generateAIResponse = async (
+  message,
+  messageHistory = []
+) => {
   try {
+    console.log("\n==============================");
+    console.log("GEMINI AI RESPONSE");
+    console.log("==============================");
+
+    console.log("Message:", message);
+    console.log(
+      "History messages:",
+      messageHistory.length
+    );
+
     const chat = model.startChat({
       history: messageHistory,
     });
 
-    const result = await chat.sendMessage(message);
+    let lastError;
 
-    const response = result.response;
+    for (
+      let attempt = 1;
+      attempt <= MAX_RETRIES;
+      attempt++
+    ) {
+      try {
+        console.log(
+          `Gemini request attempt ${attempt}/${MAX_RETRIES}`
+        );
 
-    const text = response.text();
+        const result = await chat.sendMessage(
+          message
+        );
 
-    return text;
+        const text = result.response
+          .text()
+          .trim();
+
+        if (!text) {
+          throw new Error(
+            "Gemini returned an empty response."
+          );
+        }
+
+        console.log(
+          "Gemini response received successfully."
+        );
+
+        console.log("==============================\n");
+
+        return text;
+      } catch (error) {
+        lastError = error;
+
+        console.error(
+          `Gemini attempt ${attempt} failed.`
+        );
+
+        console.error(
+          "Status:",
+          error?.status || "N/A"
+        );
+
+        console.error(
+          "Message:",
+          error?.message || "Unknown error"
+        );
+
+        // --------------------------------------
+        // Don't retry non-temporary errors
+        // --------------------------------------
+
+        if (!isRetryableError(error)) {
+          throw error;
+        }
+
+        // --------------------------------------
+        // Stop after final attempt
+        // --------------------------------------
+
+        if (attempt === MAX_RETRIES) {
+          break;
+        }
+
+        const delay =
+          2000 * Math.pow(2, attempt - 1);
+
+        console.log(
+          `Retrying Gemini in ${
+            delay / 1000
+          } seconds...`
+        );
+
+        await wait(delay);
+      }
+    }
+
+    throw lastError;
   } catch (error) {
-    console.error("Gemini API Error:", error);
+    console.error(
+      "Gemini API Error:",
+      error
+    );
 
     throw error;
   }
-}
+};
 
-// ==================================================
-// Generate Chat Title
-// ==================================================
+// ==========================================
+// GENERATE CHAT TITLE
+// ==========================================
 
-export async function generateChatTitle(message) {
+export const generateChatTitle = async (
+  message
+) => {
   try {
-    const titlePrompt = `
-You are a chat title generator.
+    console.log(
+      "Generating chat title..."
+    );
 
-Create a short and meaningful title based on the user's
-first message.
+    const prompt = `
+Generate a short title for the following user message.
 
 Rules:
-- Generate only the title.
-- Do not provide any explanation.
-- Do not use quotation marks.
-- Keep the title between 3 and 6 words.
-- The title should describe the main topic.
-- Use the same language as the user's message when possible.
-- Do not use emojis.
-- Do not start with "Title:" or "Chat:".
+- 3 to 6 words only
+- Do not use quotation marks
+- Do not add explanation
+- Return only the title
 
 User message:
 ${message}
 `;
 
-    const result = await model.generateContent(titlePrompt);
+    const result = await model.generateContent(
+      prompt
+    );
 
-    const response = result.response;
+    const text = result.response
+      .text()
+      .trim()
+      .replace(/^["']|["']$/g, "");
 
-    const title = response.text().trim();
+    if (!text) {
+      return "New Chat";
+    }
 
-    return title;
+    console.log(
+      "Chat title generated:",
+      text
+    );
+
+    return text;
   } catch (error) {
-    console.error("Gemini Chat Title Error:", error);
+    console.error(
+      "Gemini Chat Title Error:",
+      error
+    );
 
+    // Controller already has fallback
     throw error;
   }
-}
+};
