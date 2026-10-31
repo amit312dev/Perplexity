@@ -15,24 +15,55 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
 
   const handleChange = (event) => {
-    setFormData({
-      ...formData,
-      [event.target.name]: event.target.value,
-    });
+    const { name, value } = event.target;
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+
+    setError("");
+    setMessage("");
   };
 
   const handleSubmitForm = async (event) => {
     event.preventDefault();
+
     setMessage("");
     setError("");
+
+    const username = formData.username.trim();
+    const email = formData.email.trim();
+    const password = formData.password;
+
+    // Frontend validation
+    if (!username || !email || !password) {
+      setError("Please fill in all required fields.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters long.");
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const response = await register(formData);
+      const response = await register({
+        username,
+        email,
+        password,
+      });
 
       setMessage(
-        response.message ||
-          "Registration submitted. Please check your email for verification."
+        response?.message ||
+          "Registration successful. Please check your email for verification."
       );
 
       setFormData({
@@ -41,10 +72,13 @@ const Register = () => {
         password: "",
       });
     } catch (err) {
-      setError(
-        err.response?.data?.message ||
-          "Registration failed. Please try again."
-      );
+      const errorMessage =
+        err?.response?.data?.message ||
+        err?.data?.message ||
+        err?.message ||
+        "Registration failed. Please try again.";
+
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -57,9 +91,11 @@ const Register = () => {
           <p className="mb-3 text-sm font-semibold uppercase tracking-[0.25em] text-[#31b8c6]">
             Perplexity
           </p>
+
           <h1 className="text-3xl font-semibold tracking-tight">
             Create your account
           </h1>
+
           <p className="mt-2 text-sm text-zinc-400">
             Start exploring smarter conversations.
           </p>
@@ -73,6 +109,7 @@ const Register = () => {
             >
               Username
             </label>
+
             <input
               className="w-full rounded-xl border border-zinc-800 bg-zinc-900/80 px-4 py-3 text-sm outline-none transition placeholder:text-zinc-600 focus:border-[#31b8c6] focus:ring-2 focus:ring-[#31b8c6]/20"
               id="register-username"
@@ -81,6 +118,7 @@ const Register = () => {
               placeholder="Your username"
               value={formData.username}
               onChange={handleChange}
+              autoComplete="username"
               required
             />
           </div>
@@ -92,6 +130,7 @@ const Register = () => {
             >
               Email
             </label>
+
             <input
               className="w-full rounded-xl border border-zinc-800 bg-zinc-900/80 px-4 py-3 text-sm outline-none transition placeholder:text-zinc-600 focus:border-[#31b8c6] focus:ring-2 focus:ring-[#31b8c6]/20"
               id="register-email"
@@ -100,6 +139,7 @@ const Register = () => {
               placeholder="you@example.com"
               value={formData.email}
               onChange={handleChange}
+              autoComplete="email"
               required
             />
           </div>
@@ -111,16 +151,23 @@ const Register = () => {
             >
               Password
             </label>
+
             <input
               className="w-full rounded-xl border border-zinc-800 bg-zinc-900/80 px-4 py-3 text-sm outline-none transition placeholder:text-zinc-600 focus:border-[#31b8c6] focus:ring-2 focus:ring-[#31b8c6]/20"
               id="register-password"
               name="password"
               type="password"
-              placeholder="Create a password"
+              placeholder="Create a password (minimum 6 characters)"
               value={formData.password}
               onChange={handleChange}
+              autoComplete="new-password"
+              minLength={6}
               required
             />
+
+            <p className="mt-2 text-xs text-zinc-500">
+              Password must contain at least 6 characters.
+            </p>
           </div>
 
           <button
@@ -139,7 +186,10 @@ const Register = () => {
         )}
 
         {error && (
-          <p className="mt-4 text-center text-sm text-red-400">
+          <p
+            role="alert"
+            className="mt-4 text-center text-sm text-red-400"
+          >
             {error}
           </p>
         )}
