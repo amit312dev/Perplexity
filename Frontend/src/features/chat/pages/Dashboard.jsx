@@ -363,6 +363,11 @@ const Dashboard = () => {
   const [restoredUserId, setRestoredUserId] = useState(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() =>
+    window.matchMedia("(min-width: 768px)").matches
+  );
+  const [profileMenuMaxHeight, setProfileMenuMaxHeight] = useState(448);
 
   const messagesEndRef = useRef(null);
   const profileMenuRef = useRef(null);
@@ -449,6 +454,11 @@ const Dashboard = () => {
       return undefined;
     }
 
+    const updateMenuMaxHeight = () => {
+      const top = profileMenuRef.current?.getBoundingClientRect().top ?? 472;
+      setProfileMenuMaxHeight(Math.min(448, Math.max(160, top - 24)));
+    };
+
     const handlePointerDown = (event) => {
       if (!profileMenuRef.current?.contains(event.target)) {
         setProfileMenuOpen(false);
@@ -463,12 +473,49 @@ const Dashboard = () => {
 
     document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", updateMenuMaxHeight);
+    updateMenuMaxHeight();
 
     return () => {
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", updateMenuMaxHeight);
     };
   }, [profileMenuOpen]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 768px)");
+    const handleViewportChange = (event) => {
+      setIsDesktop(event.matches);
+      if (event.matches) {
+        setSidebarOpen(false);
+      }
+    };
+
+    mediaQuery.addEventListener("change", handleViewportChange);
+
+    return () => {
+      mediaQuery.removeEventListener("change", handleViewportChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!sidebarOpen) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setSidebarOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [sidebarOpen]);
 
   // ==================================================
   // AUTO SCROLL
@@ -532,6 +579,7 @@ const Dashboard = () => {
     }
 
     clearMessages();
+    setSidebarOpen(false);
     if (userId) {
       clearActiveChatId(userId);
     }
@@ -549,6 +597,7 @@ const Dashboard = () => {
 
     try {
       await fetchMessages(chatId);
+      setSidebarOpen(false);
     } catch (err) {
       console.error(
         "Failed to load chat:",
@@ -596,14 +645,29 @@ const Dashboard = () => {
   // ==================================================
 
   return (
-    <main className="h-screen w-full overflow-hidden bg-[#0b0d0f] text-white">
+    <main className="h-[100dvh] max-h-[100dvh] w-full overflow-hidden overscroll-none bg-[#0b0d0f] text-white">
       <div className="flex h-full">
 
         {/* ==================================================
             SIDEBAR
         ================================================== */}
 
-        <aside className="flex h-full w-72.5 shrink-0 flex-col border-r border-white/8 bg-[#0b0d0f] px-5 py-5">
+        {sidebarOpen && (
+          <button
+            type="button"
+            aria-label="Close navigation menu"
+            className="fixed inset-0 z-30 bg-black/60 backdrop-blur-[1px] md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        <aside
+          aria-hidden={!isDesktop && !sidebarOpen}
+          inert={!isDesktop && !sidebarOpen}
+          className={`fixed inset-y-0 left-0 z-40 flex h-[100dvh] w-[min(18.125rem,85vw)] shrink-0 flex-col border-r border-white/8 bg-[#0b0d0f] px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))] transition-transform duration-300 ease-out md:relative md:z-auto md:h-full md:w-72.5 md:translate-x-0 md:transition-none ${
+            sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
 
           {/* LOGO */}
 
@@ -614,8 +678,9 @@ const Dashboard = () => {
 
             <button
               type="button"
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition hover:bg-white/6 hover:text-gray-300"
-              aria-label="Toggle sidebar"
+              onClick={() => setSidebarOpen(false)}
+              className="flex h-11 w-11 items-center justify-center rounded-lg text-gray-500 transition hover:bg-white/6 hover:text-gray-300 md:h-8 md:w-8"
+              aria-label="Close sidebar"
             >
               <svg
                 width="19"
@@ -644,7 +709,7 @@ const Dashboard = () => {
             type="button"
             onClick={handleNewChat}
             disabled={sendingMessage}
-            className="mt-7 flex h-12 shrink-0 items-center gap-3 rounded-xl border border-white/8 bg-[#15181c] px-4 text-[14px] font-medium text-gray-200 transition hover:border-white/14 hover:bg-[#191d22] disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-5 flex h-12 shrink-0 items-center gap-3 rounded-xl border border-white/8 bg-[#15181c] px-4 text-[14px] font-medium text-gray-200 transition hover:border-white/14 hover:bg-[#191d22] disabled:cursor-not-allowed disabled:opacity-50 md:mt-7"
           >
             <span className="text-xl font-light">
               +
@@ -657,7 +722,7 @@ const Dashboard = () => {
 
           {/* RECENT */}
 
-          <div className="mt-7 flex min-h-0 flex-1 flex-col">
+          <div className="mt-6 flex min-h-0 flex-1 flex-col md:mt-7">
 
             <p className="mb-3 shrink-0 px-2 text-[12px] font-medium text-gray-500">
               Recent
@@ -698,7 +763,7 @@ const Dashboard = () => {
                         onClick={() =>
                           handleChatClick(chat.id)
                         }
-                        className={`group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition ${
+                        className={`group flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition ${
                           currentChatId ===
                           chat.id
                             ? "bg-[#20242a] text-gray-100"
@@ -734,13 +799,13 @@ const Dashboard = () => {
 
           {/* BOTTOM NAVIGATION */}
 
-          <div className="mt-4 shrink-0 space-y-0.5 border-t border-white/8 pt-4">
+          <div className="mt-4 shrink-0 space-y-0.5 border-t border-white/8 pt-4 [@media(max-height:500px)]:hidden">
 
             {/* DISCOVER */}
 
             <button
               type="button"
-              className="flex w-full items-center gap-4 rounded-lg px-3 py-2.5 text-[14px] text-gray-400 transition hover:bg-white/5 hover:text-gray-200"
+              className="flex min-h-11 w-full items-center gap-4 rounded-lg px-3 py-2.5 text-[14px] text-gray-400 transition hover:bg-white/5 hover:text-gray-200"
             >
               <svg
                 width="18"
@@ -766,7 +831,7 @@ const Dashboard = () => {
 
             <button
               type="button"
-              className="flex w-full items-center gap-4 rounded-lg px-3 py-2.5 text-[14px] text-gray-400 transition hover:bg-white/5 hover:text-gray-200"
+              className="flex min-h-11 w-full items-center gap-4 rounded-lg px-3 py-2.5 text-[14px] text-gray-400 transition hover:bg-white/5 hover:text-gray-200"
             >
               <svg
                 width="18"
@@ -808,7 +873,7 @@ const Dashboard = () => {
 
             <button
               type="button"
-              className="flex w-full items-center gap-4 rounded-lg px-3 py-2.5 text-[14px] text-gray-400 transition hover:bg-white/5 hover:text-gray-200"
+              className="flex min-h-11 w-full items-center gap-4 rounded-lg px-3 py-2.5 text-[14px] text-gray-400 transition hover:bg-white/5 hover:text-gray-200"
             >
               <svg
                 width="18"
@@ -838,7 +903,8 @@ const Dashboard = () => {
               <div
                 role="menu"
                 aria-label="Account menu"
-                className="absolute bottom-full left-0 z-50 mb-3 w-[min(18rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-white/10 bg-[#202124] p-2 shadow-2xl shadow-black/50"
+                className="absolute bottom-full left-0 z-50 mb-3 w-[min(18rem,calc(100vw-2rem))] overflow-x-hidden overflow-y-auto rounded-2xl border border-white/10 bg-[#202124] p-2 shadow-2xl shadow-black/50"
+                style={{ maxHeight: profileMenuMaxHeight }}
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="mb-2 flex items-center gap-3 rounded-xl px-3 py-3">
@@ -885,7 +951,7 @@ const Dashboard = () => {
                       type="button"
                       role="menuitem"
                       onClick={() => setProfileMenuOpen(false)}
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] text-gray-200 transition hover:bg-white/8"
+                      className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] text-gray-200 transition hover:bg-white/8"
                     >
                       <svg
                         width="18"
@@ -915,7 +981,7 @@ const Dashboard = () => {
                   role="menuitem"
                   onClick={handleLogoutClick}
                   disabled={loggingOut}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] text-red-300 transition hover:bg-red-400/10 disabled:cursor-wait disabled:opacity-60"
+                  className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] text-red-300 transition hover:bg-red-400/10 disabled:cursor-wait disabled:opacity-60"
                 >
                   <svg
                     width="18"
@@ -940,9 +1006,9 @@ const Dashboard = () => {
               aria-haspopup="menu"
               aria-expanded={profileMenuOpen}
               onClick={() => setProfileMenuOpen((open) => !open)}
-              className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-white/6"
+              className="flex min-h-11 w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-white/6"
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#242830] text-sm font-medium text-gray-200">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#242830] text-sm font-medium text-gray-200 md:h-10 md:w-10">
                 {userInitial}
               </div>
 
@@ -977,9 +1043,55 @@ const Dashboard = () => {
 
         <section className="relative flex h-full min-w-0 flex-1 flex-col">
 
+          <header className="z-10 flex min-h-14 shrink-0 items-center gap-3 border-b border-white/6 px-3 pt-[env(safe-area-inset-top)] md:hidden">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open chat history"
+              aria-expanded={sidebarOpen}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-gray-300 transition hover:bg-white/8 active:bg-white/10"
+            >
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <div className="min-w-0 flex-1 truncate text-sm font-medium text-gray-200">
+              {chats.find((chat) => chat.id === currentChatId)?.title || "Perplexity"}
+            </div>
+            <button
+              type="button"
+              onClick={handleNewChat}
+              disabled={sendingMessage}
+              aria-label="New chat"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-gray-300 transition hover:bg-white/8 disabled:opacity-50"
+            >
+              <svg
+                width="21"
+                height="21"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+          </header>
+
           {/* TOP RIGHT USER */}
 
-          <div className="absolute right-7 top-5 z-10">
+          <div className="absolute right-7 top-5 z-10 hidden md:block">
             <div className="flex items-center gap-2.5 text-gray-400">
 
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#20242a]">
@@ -1021,7 +1133,7 @@ const Dashboard = () => {
                EMPTY CHAT
             ================================================== */
 
-            <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6">
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-5 sm:px-6">
 
               {/* ICON */}
 
@@ -1040,7 +1152,7 @@ const Dashboard = () => {
 
               {/* HEADING */}
 
-              <h2 className="text-[31px] font-medium tracking-tight text-gray-100">
+              <h2 className="text-center text-2xl font-medium tracking-tight text-gray-100 sm:text-[31px]">
                 Ask anything
               </h2>
 
@@ -1054,7 +1166,7 @@ const Dashboard = () => {
 
               {/* SUGGESTIONS */}
 
-              <div className="mt-6 grid w-full max-w-162.5 grid-cols-2 gap-2.5">
+              <div className="mt-6 grid w-full max-w-162.5 grid-cols-1 gap-2.5 min-[390px]:grid-cols-2">
 
                 <button
                   type="button"
@@ -1063,7 +1175,7 @@ const Dashboard = () => {
                       "Explain a complex topic"
                     )
                   }
-                  className="flex items-center gap-3 rounded-full border border-white/8 bg-[#111419] px-5 py-3 text-left text-[13px] text-gray-300 transition hover:border-white/15 hover:bg-[#171a1f]"
+                  className="flex min-h-11 min-w-0 items-center gap-3 rounded-full border border-white/8 bg-[#111419] px-4 py-3 text-left text-[13px] text-gray-300 transition hover:border-white/15 hover:bg-[#171a1f] sm:px-5"
                 >
                   <span className="text-base">
                     ✧
@@ -1079,7 +1191,7 @@ const Dashboard = () => {
                       "Summarize a document"
                     )
                   }
-                  className="flex items-center gap-3 rounded-full border border-white/8 bg-[#111419] px-5 py-3 text-left text-[13px] text-gray-300 transition hover:border-white/15 hover:bg-[#171a1f]"
+                  className="flex min-h-11 min-w-0 items-center gap-3 rounded-full border border-white/8 bg-[#111419] px-4 py-3 text-left text-[13px] text-gray-300 transition hover:border-white/15 hover:bg-[#171a1f] sm:px-5"
                 >
                   <span className="text-base">
                     ▤
@@ -1095,7 +1207,7 @@ const Dashboard = () => {
                       "Help me write code"
                     )
                   }
-                  className="flex items-center gap-3 rounded-full border border-white/8 bg-[#111419] px-5 py-3 text-left text-[13px] text-gray-300 transition hover:border-white/15 hover:bg-[#171a1f]"
+                  className="flex min-h-11 min-w-0 items-center gap-3 rounded-full border border-white/8 bg-[#111419] px-4 py-3 text-left text-[13px] text-gray-300 transition hover:border-white/15 hover:bg-[#171a1f] sm:px-5"
                 >
                   <span className="text-sm">
                     &lt;/&gt;
@@ -1111,7 +1223,7 @@ const Dashboard = () => {
                       "Generate some ideas"
                     )
                   }
-                  className="flex items-center gap-3 rounded-full border border-white/8 bg-[#111419] px-5 py-3 text-left text-[13px] text-gray-300 transition hover:border-white/15 hover:bg-[#171a1f]"
+                  className="flex min-h-11 min-w-0 items-center gap-3 rounded-full border border-white/8 bg-[#111419] px-4 py-3 text-left text-[13px] text-gray-300 transition hover:border-white/15 hover:bg-[#171a1f] sm:px-5"
                 >
                   <span className="text-base">
                     ▧
@@ -1128,17 +1240,17 @@ const Dashboard = () => {
                MESSAGES
             ================================================== */
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-20 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/15 hover:[&::-webkit-scrollbar-thumb]:bg-white/25">
+            <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pb-5 pt-5 sm:px-6 md:pb-8 md:pt-20 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/15 hover:[&::-webkit-scrollbar-thumb]:bg-white/25">
 
-              <div className="mx-auto w-full max-w-215 space-y-8">
+              <div className="mx-auto w-full max-w-215 space-y-6 sm:space-y-8">
 
                 {messages.map((msg) => (
                   <div
                     key={msg.id}
                     className={
                       msg.role === "user"
-                        ? "flex justify-end"
-                        : "flex justify-start"
+                        ? "flex min-w-0 justify-end"
+                        : "flex min-w-0 justify-start"
                     }
                   >
 
@@ -1147,7 +1259,7 @@ const Dashboard = () => {
                     ================================================== */}
 
                     {msg.role === "user" ? (
-                      <div className="max-w-[75%] rounded-2xl bg-[#20242a] px-4 py-3 text-[14px] leading-6 text-gray-100">
+                      <div className="max-w-[92%] break-words rounded-2xl bg-[#20242a] px-4 py-3 text-[14px] leading-6 text-gray-100 [overflow-wrap:anywhere] sm:max-w-[75%]">
                         {msg.content}
                       </div>
                     ) : (
@@ -1156,7 +1268,7 @@ const Dashboard = () => {
                          AI MESSAGE
                       ================================================== */
 
-                      <div className="max-w-[85%] min-w-0 text-[14px] leading-7 text-gray-300">
+                      <div className="max-w-full min-w-0 text-[14px] leading-7 text-gray-300 sm:max-w-[85%]">
 
                         {/* AI HEADER */}
 
@@ -1173,7 +1285,7 @@ const Dashboard = () => {
 
                         {/* MARKDOWN RESPONSE */}
 
-                        <div className="min-w-0">
+                        <div className="min-w-0 break-words [overflow-wrap:anywhere]">
                           <ReactMarkdown
                             components={
                               markdownComponents

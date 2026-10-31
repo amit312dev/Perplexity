@@ -173,8 +173,19 @@ export const verifyEmail = async (req, res) => {
 
     if (!token) {
       return res.status(400).send(`
-        <h2>Email Verification Failed</h2>
-        <p>Verification token is required.</p>
+        <!DOCTYPE html>
+        <html lang="en">
+          <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Email Verification Failed</title>
+          </head>
+          <body style="box-sizing:border-box;margin:0;min-height:100vh;padding:24px;display:grid;place-items:center;background:#f5f5f5;font-family:Arial,sans-serif;color:#18181b;">
+            <main style="box-sizing:border-box;width:min(100%,520px);padding:clamp(24px,6vw,36px);background:#fff;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.08);overflow-wrap:anywhere;">
+              <h2 style="margin-top:0;">Email Verification Failed</h2>
+              <p style="line-height:1.6;">Verification token is required.</p>
+            </main>
+          </body>
+        </html>
       `);
     }
 
@@ -211,17 +222,18 @@ export const verifyEmail = async (req, res) => {
       <!DOCTYPE html>
       <html>
         <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
           <title>Email Verification</title>
         </head>
-        <body style="font-family:Arial;text-align:center;padding:50px;background:#f5f5f5;">
-          <div style="max-width:520px;margin:auto;padding:30px;background:white;border-radius:12px;">
+        <body style="box-sizing:border-box;margin:0;min-height:100vh;padding:24px;display:grid;place-items:center;font-family:Arial,sans-serif;text-align:center;background:#f5f5f5;color:#18181b;">
+          <main style="box-sizing:border-box;width:min(100%,520px);padding:clamp(24px,6vw,36px);background:white;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.08);overflow-wrap:anywhere;">
             <h2 style="color:#166534;">Email Verified Successfully</h2>
-            <p>Your account has been verified. You can now log in.</p>
+            <p style="line-height:1.6;">Your account has been verified. You can now log in.</p>
             <a href="${frontendUrl}/login"
-              style="display:inline-block;margin-top:16px;padding:10px 18px;text-decoration:none;background:#2563eb;color:white;border-radius:8px;">
+              style="display:inline-flex;min-height:44px;box-sizing:border-box;align-items:center;justify-content:center;margin-top:16px;padding:10px 18px;text-decoration:none;background:#2563eb;color:white;border-radius:8px;">
               Go to Login
             </a>
-          </div>
+          </main>
         </body>
       </html>
     `);
@@ -233,9 +245,20 @@ export const verifyEmail = async (req, res) => {
       process.env.FRONTEND_URL || 'http://localhost:5173';
 
     return res.status(400).send(`
-      <h2>Verification Failed</h2>
-      <p>Your verification link is invalid or has expired.</p>
-      <a href="${frontendUrl}/login">Go to Login</a>
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Verification Failed</title>
+        </head>
+        <body style="box-sizing:border-box;margin:0;min-height:100vh;padding:24px;display:grid;place-items:center;background:#f5f5f5;font-family:Arial,sans-serif;color:#18181b;">
+          <main style="box-sizing:border-box;width:min(100%,520px);padding:clamp(24px,6vw,36px);background:#fff;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.08);overflow-wrap:anywhere;">
+            <h2 style="margin-top:0;">Verification Failed</h2>
+            <p style="line-height:1.6;">Your verification link is invalid or has expired.</p>
+            <a href="${frontendUrl}/login" style="display:inline-flex;min-height:44px;box-sizing:border-box;align-items:center;justify-content:center;margin-top:16px;padding:10px 18px;text-decoration:none;background:#2563eb;color:white;border-radius:8px;">Go to Login</a>
+          </main>
+        </body>
+      </html>
     `);
   }
 };

@@ -35,11 +35,11 @@ const Login = () => {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center overflow-hidden bg-[#09090b] px-4 py-10 text-zinc-100">
-      <section className="relative w-full max-w-md rounded-3xl border border-[#31b8c6]/20 bg-zinc-950/80 p-8 shadow-2xl shadow-black/40 backdrop-blur-xl sm:p-10">
+    <main className="flex min-h-[100dvh] w-full items-center justify-center bg-[#09090b] px-4 py-8 text-zinc-100 sm:py-10">
+      <section className="relative w-full max-w-md rounded-3xl border border-[#31b8c6]/20 bg-zinc-950/80 p-6 shadow-2xl shadow-black/40 backdrop-blur-xl sm:p-10">
         <div className="mb-9">
           <p className="mb-3 text-sm font-semibold uppercase tracking-[0.25em] text-[#31b8c6]">Perplexity</p>
-          <h1 className="text-3xl font-semibold tracking-tight">Welcome back</h1>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Welcome back</h1>
           <p className="mt-2 text-sm text-zinc-400">Sign in to continue your conversations.</p>
         </div>
 
@@ -47,7 +47,7 @@ const Login = () => {
           <div>
             <label className="mb-2 block text-sm font-medium text-zinc-300" htmlFor="login-email">Email</label>
             <input
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-900/80 px-4 py-3 text-sm outline-none transition placeholder:text-zinc-600 focus:border-[#31b8c6] focus:ring-2 focus:ring-[#31b8c6]/20"
+              className="min-h-12 w-full rounded-xl border border-zinc-800 bg-zinc-900/80 px-4 py-3 text-base outline-none transition placeholder:text-zinc-600 focus:border-[#31b8c6] focus:ring-2 focus:ring-[#31b8c6]/20 sm:text-sm"
               id="login-email"
               name="email"
               type="email"
@@ -62,7 +62,7 @@ const Login = () => {
           <div>
             <label className="mb-2 block text-sm font-medium text-zinc-300" htmlFor="login-password">Password</label>
             <input
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-900/80 px-4 py-3 text-sm outline-none transition placeholder:text-zinc-600 focus:border-[#31b8c6] focus:ring-2 focus:ring-[#31b8c6]/20"
+              className="min-h-12 w-full rounded-xl border border-zinc-800 bg-zinc-900/80 px-4 py-3 text-base outline-none transition placeholder:text-zinc-600 focus:border-[#31b8c6] focus:ring-2 focus:ring-[#31b8c6]/20 sm:text-sm"
               id="login-password"
               name="password"
               type="password"
@@ -74,7 +74,7 @@ const Login = () => {
             />
           </div>
 
-          <button className="w-full rounded-xl bg-[#31b8c6] px-4 py-3 text-sm font-semibold text-zinc-950 shadow-lg shadow-[#31b8c6]/20 transition hover:bg-[#289eaa] focus:outline-none focus:ring-2 focus:ring-[#31b8c6] focus:ring-offset-2 focus:ring-offset-zinc-950 disabled:cursor-not-allowed disabled:opacity-60" type="submit" disabled={loading}>
+          <button className="min-h-12 w-full rounded-xl bg-[#31b8c6] px-4 py-3 text-sm font-semibold text-zinc-950 shadow-lg shadow-[#31b8c6]/20 transition hover:bg-[#289eaa] focus:outline-none focus:ring-2 focus:ring-[#31b8c6] focus:ring-offset-2 focus:ring-offset-zinc-950 disabled:cursor-not-allowed disabled:opacity-60" type="submit" disabled={loading}>
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
