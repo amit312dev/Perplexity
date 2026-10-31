@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   registerUser,
   loginUser,
+  logoutUser,
   verifyEmail,
   testEmail,
   mailHealthCheck,
@@ -26,6 +27,7 @@ authRouter.post(
 
 authRouter.get('/verify-email', verifyEmail);
 authRouter.post('/login', loginValidation, handleValidationErrors, loginUser);
+authRouter.post('/logout', logoutUser);
 authRouter.post('/resend-verification', resendVerificationEmail);
 authRouter.post('/test-email', testEmail);
 authRouter.get('/mail-health', mailHealthCheck);

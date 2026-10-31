@@ -33,3 +33,12 @@ export const initializeSocketConnection = () => {
 export const getSocket = () => {
   return socket;
 };
+
+export const disconnectSocket = () => {
+  if (!socket) {
+    return;
+  }
+
+  socket.disconnect();
+  socket = null;
+};

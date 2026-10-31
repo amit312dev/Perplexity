@@ -1,8 +1,15 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import ReactMarkdown from "react-markdown";
+import { useNavigate } from "react-router";
 
 import { useChat } from "../hooks/useChat";
+import { useAuth } from "../../auth/hooks/useAuth";
+import {
+  clearActiveChatId,
+  getActiveChatId,
+  setActiveChatId,
+} from "../service/activeChatStorage";
 
 // ==================================================
 // CODE BLOCK
@@ -334,7 +341,10 @@ const Dashboard = () => {
     fetchMessages,
     sendMessage,
     clearMessages,
+    clearChatError,
   } = useChat();
+  const { handleLogout } = useAuth();
+  const navigate = useNavigate();
 
   // ==================================================
   // AUTH USER
@@ -343,14 +353,19 @@ const Dashboard = () => {
   const { user } = useSelector(
     (state) => state.auth
   );
+  const userId = user?._id;
 
   // ==================================================
   // LOCAL STATE
   // ==================================================
 
   const [message, setMessage] = useState("");
+  const [restoredUserId, setRestoredUserId] = useState(null);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const messagesEndRef = useRef(null);
+  const profileMenuRef = useRef(null);
 
   // ==================================================
   // SOCKET CONNECTION
@@ -365,8 +380,95 @@ const Dashboard = () => {
   // ==================================================
 
   useEffect(() => {
-    fetchChats();
-  }, [fetchChats]);
+    let cancelled = false;
+
+    setRestoredUserId(null);
+    clearMessages();
+
+    const restoreChat = async () => {
+      try {
+        const chatList = await fetchChats();
+
+        if (cancelled) {
+          return;
+        }
+
+        const savedChatId = getActiveChatId(userId);
+
+        if (!chatList.length || !savedChatId) {
+          if (savedChatId) {
+            clearActiveChatId(userId);
+          }
+          return;
+        }
+
+        if (!chatList.some((chat) => chat.id === savedChatId)) {
+          clearActiveChatId(userId);
+          return;
+        }
+
+        try {
+          await fetchMessages(savedChatId);
+        } catch (fetchError) {
+          if (cancelled) {
+            return;
+          }
+
+          if (fetchError?.status === 404) {
+            clearActiveChatId(userId);
+            clearMessages();
+            clearChatError();
+          }
+        }
+      } catch {
+        // The rejected thunk updates the chat error shown in the dashboard.
+      } finally {
+        if (!cancelled) {
+          setRestoredUserId(userId);
+        }
+      }
+    };
+
+    if (userId) {
+      restoreChat();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clearChatError, clearMessages, fetchChats, fetchMessages, userId]);
+
+  useEffect(() => {
+    if (userId && restoredUserId === userId && currentChatId) {
+      setActiveChatId(userId, currentChatId);
+    }
+  }, [currentChatId, restoredUserId, userId]);
+
+  useEffect(() => {
+    if (!profileMenuOpen) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event) => {
+      if (!profileMenuRef.current?.contains(event.target)) {
+        setProfileMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setProfileMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [profileMenuOpen]);
 
   // ==================================================
   // AUTO SCROLL
@@ -430,6 +532,9 @@ const Dashboard = () => {
     }
 
     clearMessages();
+    if (userId) {
+      clearActiveChatId(userId);
+    }
     setMessage("");
   };
 
@@ -452,6 +557,17 @@ const Dashboard = () => {
     }
   };
 
+  const handleLogoutClick = async () => {
+    if (loggingOut) {
+      return;
+    }
+
+    setLoggingOut(true);
+    setProfileMenuOpen(false);
+    await handleLogout();
+    navigate("/login", { replace: true });
+  };
+
   // ==================================================
   // SUGGESTION
   // ==================================================
@@ -465,9 +581,15 @@ const Dashboard = () => {
   // ==================================================
 
   const userInitial =
-    user?.name
-      ?.charAt(0)
-      ?.toUpperCase() || "A";
+    (user?.username || user?.email || "")
+      .split(/[\s._-]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part.charAt(0))
+      .join("")
+      .toUpperCase() || "U";
+
+  const accountPlan = user?.plan || user?.accountPlan;
 
   // ==================================================
   // UI
@@ -711,33 +833,140 @@ const Dashboard = () => {
 
           {/* USER */}
 
-          <div className="mt-4 flex shrink-0 items-center gap-3 border-t border-white/8 pt-4">
+          <div className="relative mt-4 shrink-0 border-t border-white/8 pt-4" ref={profileMenuRef}>
+            {profileMenuOpen && (
+              <div
+                role="menu"
+                aria-label="Account menu"
+                className="absolute bottom-full left-0 z-50 mb-3 w-[min(18rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-white/10 bg-[#202124] p-2 shadow-2xl shadow-black/50"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="mb-2 flex items-center gap-3 rounded-xl px-3 py-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#383a3d] text-sm font-medium text-gray-100">
+                    {userInitial}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-gray-100">
+                      {user?.username || "User"}
+                    </p>
+                    <p className="truncate text-xs text-gray-400">
+                      {user?.email || ""}
+                    </p>
+                    {accountPlan && (
+                      <p className="mt-1 truncate text-xs text-gray-500">
+                        {accountPlan}
+                      </p>
+                    )}
+                  </div>
+                  <svg
+                    width="17"
+                    height="17"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    className="shrink-0 text-gray-400"
+                    aria-hidden="true"
+                  >
+                    <path d="m9 18 6-6-6-6" />
+                  </svg>
+                </div>
 
-            {/* AVATAR */}
+                <div className="space-y-0.5">
+                  {[
+                    ["Upgrade Plan", "M12 3 3.5 8v8L12 21l8.5-5V8L12 3Z M12 8v8 M8 12h8"],
+                    ["Personalization", "M4 6h16 M4 12h16 M4 18h16 M8 4v4 M15 10v4 M10 16v4"],
+                    ["Profile", "M20 21a8 8 0 0 0-16 0 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"],
+                    ["Settings", "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.7 1.7-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.1h-2.4v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.7-1.7.1-.1A1.7 1.7 0 0 0 8.4 15a1.7 1.7 0 0 0-1.6-1H6.7v-2.4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L8 8.6l1.7-1.7.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6v-.1h2.4v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.7 1.7-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1V14h-.1a1.7 1.7 0 0 0-1.6 1Z"],
+                    ["Help", "M12 18h.01 M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z"],
+                  ].map(([label, iconPath]) => (
+                    <button
+                      key={label}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => setProfileMenuOpen(false)}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] text-gray-200 transition hover:bg-white/8"
+                    >
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="shrink-0 text-gray-400"
+                        aria-hidden="true"
+                      >
+                        {iconPath.split(" M").map((path, index) => (
+                          <path key={index} d={index ? `M${path}` : path} />
+                        ))}
+                      </svg>
+                      {label}
+                    </button>
+                  ))}
+                </div>
 
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#242830] text-sm font-medium text-gray-200">
-              {userInitial}
-            </div>
+                <div className="my-2 border-t border-white/10" />
 
-            {/* USER INFO */}
-
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[14px] font-medium text-gray-200">
-                {user?.name || "User"}
-              </p>
-
-              <p className="truncate text-[11px] text-gray-500">
-                {user?.email || ""}
-              </p>
-            </div>
-
-            {/* MORE */}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={handleLogoutClick}
+                  disabled={loggingOut}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] text-red-300 transition hover:bg-red-400/10 disabled:cursor-wait disabled:opacity-60"
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M10 17l5-5-5-5 M15 12H3 M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6" />
+                  </svg>
+                  {loggingOut ? "Logging out..." : "Log out"}
+                </button>
+              </div>
+            )}
 
             <button
               type="button"
-              className="rounded-lg px-2 py-1 text-sm text-gray-500 transition hover:bg-white/6 hover:text-gray-300"
+              aria-haspopup="menu"
+              aria-expanded={profileMenuOpen}
+              onClick={() => setProfileMenuOpen((open) => !open)}
+              className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-white/6"
             >
-              •••
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#242830] text-sm font-medium text-gray-200">
+                {userInitial}
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[14px] font-medium text-gray-200">
+                  {user?.username || "User"}
+                </p>
+                <p className="truncate text-[11px] text-gray-500">
+                  {user?.email || ""}
+                </p>
+              </div>
+
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                className={`shrink-0 text-gray-500 transition-transform ${profileMenuOpen ? "rotate-180" : ""}`}
+                aria-hidden="true"
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
             </button>
           </div>
         </aside>

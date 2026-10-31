@@ -31,7 +31,7 @@ const generateVerificationToken = (userId, email) => {
   );
 };
 
-// Common verification email sender
+// Create verification link
 const createVerificationLink = (token) => {
   const backendBaseUrl =
     process.env.BACKEND_URL || 'http://localhost:3000';
@@ -44,7 +44,6 @@ export const registerUser = async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
-    // Required field validation
     if (!username?.trim() || !email?.trim() || !password) {
       return res.status(400).json({
         success: false,
@@ -55,7 +54,6 @@ export const registerUser = async (req, res) => {
     const normalizedUsername = username.trim();
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Password validation
     if (password.length < 6) {
       return res.status(400).json({
         success: false,
@@ -63,7 +61,6 @@ export const registerUser = async (req, res) => {
       });
     }
 
-    // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!emailRegex.test(normalizedEmail)) {
@@ -73,7 +70,6 @@ export const registerUser = async (req, res) => {
       });
     }
 
-    // Check existing user
     const existingUser = await userModel.findOne({
       $or: [
         { email: normalizedEmail },
@@ -93,10 +89,8 @@ export const registerUser = async (req, res) => {
       });
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
     const newUser = new userModel({
       username: normalizedUsername,
       email: normalizedEmail,
@@ -105,7 +99,6 @@ export const registerUser = async (req, res) => {
 
     await newUser.save();
 
-    // Generate verification token
     const verificationToken = generateVerificationToken(
       newUser._id,
       newUser.email
@@ -117,7 +110,6 @@ export const registerUser = async (req, res) => {
 
     await newUser.save();
 
-    // Send verification email
     const verificationLink = createVerificationLink(
       verificationToken
     );
@@ -153,6 +145,7 @@ export const registerUser = async (req, res) => {
         verified: newUser.verified,
       },
     });
+
   } catch (error) {
     console.error('Registration error:', error);
 
@@ -180,16 +173,8 @@ export const verifyEmail = async (req, res) => {
 
     if (!token) {
       return res.status(400).send(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Email Verification</title>
-          </head>
-          <body style="font-family:Arial;text-align:center;padding:50px;">
-            <h2 style="color:#b91c1c;">Verification Failed</h2>
-            <p>Verification token is required.</p>
-          </body>
-        </html>
+        <h2>Email Verification Failed</h2>
+        <p>Verification token is required.</p>
       `);
     }
 
@@ -211,16 +196,8 @@ export const verifyEmail = async (req, res) => {
 
     if (!user) {
       return res.status(400).send(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Email Verification</title>
-          </head>
-          <body style="font-family:Arial;text-align:center;padding:50px;">
-            <h2 style="color:#b91c1c;">Verification Failed</h2>
-            <p>Invalid or expired verification token.</p>
-          </body>
-        </html>
+        <h2>Verification Failed</h2>
+        <p>Invalid or expired verification token.</p>
       `);
     }
 
@@ -240,16 +217,15 @@ export const verifyEmail = async (req, res) => {
           <div style="max-width:520px;margin:auto;padding:30px;background:white;border-radius:12px;">
             <h2 style="color:#166534;">Email Verified Successfully</h2>
             <p>Your account has been verified. You can now log in.</p>
-            <a
-              href="${frontendUrl}/login"
-              style="display:inline-block;margin-top:16px;padding:10px 18px;text-decoration:none;background:#2563eb;color:white;border-radius:8px;"
-            >
+            <a href="${frontendUrl}/login"
+              style="display:inline-block;margin-top:16px;padding:10px 18px;text-decoration:none;background:#2563eb;color:white;border-radius:8px;">
               Go to Login
             </a>
           </div>
         </body>
       </html>
     `);
+
   } catch (error) {
     console.error('Email verification error:', error.message);
 
@@ -257,19 +233,9 @@ export const verifyEmail = async (req, res) => {
       process.env.FRONTEND_URL || 'http://localhost:5173';
 
     return res.status(400).send(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Email Verification</title>
-        </head>
-        <body style="font-family:Arial;text-align:center;padding:50px;background:#f5f5f5;">
-          <div style="max-width:520px;margin:auto;padding:30px;background:white;border-radius:12px;">
-            <h2 style="color:#b91c1c;">Verification Failed</h2>
-            <p>Your verification link is invalid or has expired.</p>
-            <a href="${frontendUrl}/login">Go to Login</a>
-          </div>
-        </body>
-      </html>
+      <h2>Verification Failed</h2>
+      <p>Your verification link is invalid or has expired.</p>
+      <a href="${frontendUrl}/login">Go to Login</a>
     `);
   }
 };
@@ -317,11 +283,15 @@ export const loginUser = async (req, res) => {
 
     const token = generateToken(user._id);
 
+    // Local and production cookie configuration
+    const isProduction = process.env.NODE_ENV === 'production';
+
     res.cookie('authToken', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'none',
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/',
     });
 
     return res.status(200).json({
@@ -335,6 +305,7 @@ export const loginUser = async (req, res) => {
         verified: user.verified,
       },
     });
+
   } catch (error) {
     console.error('Login error:', error);
 
@@ -343,6 +314,23 @@ export const loginUser = async (req, res) => {
       message: 'Unable to login. Please try again.',
     });
   }
+};
+
+// Log out user
+export const logoutUser = (req, res) => {
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  res.clearCookie('authToken', {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'lax',
+    path: '/',
+  });
+
+  return res.status(200).json({
+    success: true,
+    message: 'Logout successful.',
+  });
 };
 
 // Resend verification email
@@ -402,6 +390,7 @@ export const resendVerificationEmail = async (req, res) => {
       success: true,
       message: 'Verification email sent successfully.',
     });
+
   } catch (error) {
     console.error('Resend verification error:', error);
 
@@ -413,7 +402,7 @@ export const resendVerificationEmail = async (req, res) => {
   }
 };
 
-// Test email using Gmail API
+// Test email
 export const testEmail = async (req, res) => {
   try {
     const { to } = req.body;
@@ -443,7 +432,8 @@ export const testEmail = async (req, res) => {
           <p>This is a test email from your Perplexity backend.</p>
         </div>
       `,
-      text: 'Gmail API test successful. This is a test email from your Perplexity backend.',
+      text:
+        'Gmail API test successful. This is a test email from your Perplexity backend.',
     });
 
     return res.status(200).json({
@@ -452,6 +442,7 @@ export const testEmail = async (req, res) => {
       messageId: info.id,
       emailServiceConnected: true,
     });
+
   } catch (error) {
     console.error('Test email error:', error);
 
@@ -477,6 +468,7 @@ export const mailHealthCheck = async (req, res) => {
         ? 'Gmail API configuration is available.'
         : 'Gmail API configuration is incomplete.',
     });
+
   } catch (error) {
     return res.status(500).json({
       success: false,
@@ -492,9 +484,17 @@ export const getMe = async (req, res) => {
     const user = await userModel.findById(req.userId);
 
     if (!user) {
-      return res.status(404).json({
+      res.clearCookie('authToken', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite:
+          process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        path: '/',
+      });
+
+      return res.status(401).json({
         success: false,
-        message: 'User not found.',
+        message: 'Session expired. Please log in again.',
       });
     }
 
@@ -507,6 +507,7 @@ export const getMe = async (req, res) => {
         verified: user.verified,
       },
     });
+
   } catch (error) {
     console.error('Get user error:', error);
 

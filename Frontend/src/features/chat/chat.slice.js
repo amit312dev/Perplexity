@@ -43,8 +43,12 @@ export const fetchMessages = createAsyncThunk(
       return data;
     } catch (error) {
       return rejectWithValue(
-        error.response?.data?.message ||
-          "Failed to load messages."
+        {
+          message:
+            error.response?.data?.message ||
+            "Failed to load messages.",
+          status: error.response?.status,
+        }
       );
     }
   }
@@ -144,6 +148,8 @@ const chatSlice = createSlice({
     clearChatError: (state) => {
       state.error = null;
     },
+
+    resetChatState: () => initialState,
   },
 
   extraReducers: (builder) => {
@@ -194,7 +200,7 @@ const chatSlice = createSlice({
         state.messagesLoading = false;
 
         state.error =
-          action.payload ||
+          action.payload?.message ||
           "Failed to load messages.";
       });
 
@@ -316,6 +322,7 @@ export const {
   setCurrentChat,
   clearMessages,
   clearChatError,
+  resetChatState,
 } = chatSlice.actions;
 
 // ==================================================

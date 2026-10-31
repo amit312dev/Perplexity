@@ -39,7 +39,7 @@ export const useChat = () => {
   // ==================================================
 
   const fetchChats = useCallback(() => {
-    return dispatch(fetchChatsAction());
+    return dispatch(fetchChatsAction()).unwrap();
   }, [dispatch]);
 
   // ==================================================
@@ -48,7 +48,7 @@ export const useChat = () => {
 
   const fetchMessages = useCallback(
     (chatId) => {
-      return dispatch(fetchMessagesAction(chatId));
+      return dispatch(fetchMessagesAction(chatId)).unwrap();
     },
     [dispatch]
   );
