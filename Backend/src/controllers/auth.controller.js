@@ -171,7 +171,9 @@ export const verifyEmail = async (req, res) => {
           <div class="card">
             <h2 class="success">Email Verified Successfully</h2>
             <p>Your account has been verified. You can now log in.</p>
-            <a class="btn" href="/login">Go to Login</a>
+            <a class="btn" href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/login">
+                 Go to Login
+            </a>
           </div>
         </body>
       </html>
