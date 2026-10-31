@@ -16,13 +16,13 @@ const startServer = async () => {
   try {
     await connectDB();
 
-    const smtpReady = await verifySMTPConnection();
+   const emailServiceReady = await verifySMTPConnection();
 
-    if (!smtpReady) {
-      console.warn(
-        "SMTP not available at startup, but server is still running"
-      );
-    }
+if (!emailServiceReady) {
+  console.warn(
+    "Gmail API configuration is incomplete, but server is still running"
+  );
+}
 
     httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);

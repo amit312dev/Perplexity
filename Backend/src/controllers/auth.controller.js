@@ -1,58 +1,126 @@
+
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import userModel from '../models/user.model.js';
+
 import {
   sendVerificationEmail,
   sendEmail,
   verifySMTPConnection,
 } from '../services/mail.service.js';
 
+// Generate authentication token
 const generateToken = (userId) => {
-  return jwt.sign({ id: userId }, process.env.JWT_SECRET || 'secretkey', {
-    expiresIn: '7d',
-  });
+  return jwt.sign(
+    { id: userId },
+    process.env.JWT_SECRET || 'secretkey',
+    { expiresIn: '7d' }
+  );
 };
 
+// Generate email verification token
 const generateVerificationToken = (userId, email) => {
   return jwt.sign(
-    { id: userId, email, purpose: 'verify-email' },
+    {
+      id: userId,
+      email,
+      purpose: 'verify-email',
+    },
     process.env.JWT_SECRET || 'secretkey',
     { expiresIn: '1d' }
   );
 };
 
+// Common verification email sender
+const createVerificationLink = (token) => {
+  const backendBaseUrl =
+    process.env.BACKEND_URL || 'http://localhost:3000';
+
+  return `${backendBaseUrl}/api/auth/verify-email?token=${token}`;
+};
+
+// Register user
 export const registerUser = async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
-    const existingUser = await userModel.findOne({
-      $or: [{ email }, { username }],
-    });
-
-    if (existingUser) {
+    // Required field validation
+    if (!username?.trim() || !email?.trim() || !password) {
       return res.status(400).json({
         success: false,
-        message: 'User with this email or username already exists',
+        message: 'Please fill in all required fields.',
       });
     }
 
+    const normalizedUsername = username.trim();
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Password validation
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters long.',
+      });
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailRegex.test(normalizedEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter a valid email address.',
+      });
+    }
+
+    // Check existing user
+    const existingUser = await userModel.findOne({
+      $or: [
+        { email: normalizedEmail },
+        { username: normalizedUsername },
+      ],
+    });
+
+    if (existingUser) {
+      const message =
+        existingUser.email === normalizedEmail
+          ? 'This email address is already registered.'
+          : 'This username is already taken.';
+
+      return res.status(409).json({
+        success: false,
+        message,
+      });
+    }
+
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Create user
     const newUser = new userModel({
-      username,
-      email,
+      username: normalizedUsername,
+      email: normalizedEmail,
       password: hashedPassword,
     });
 
     await newUser.save();
 
-    const verificationToken = generateVerificationToken(newUser._id, newUser.email);
+    // Generate verification token
+    const verificationToken = generateVerificationToken(
+      newUser._id,
+      newUser.email
+    );
+
     newUser.verificationToken = verificationToken;
-    newUser.verificationTokenExpires = Date.now() + 24 * 60 * 60 * 1000;
+    newUser.verificationTokenExpires =
+      Date.now() + 24 * 60 * 60 * 1000;
+
     await newUser.save();
 
-    const backendBaseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
-    const verificationLink = `${backendBaseUrl}/api/auth/verify-email?token=${verificationToken}`;
+    // Send verification email
+    const verificationLink = createVerificationLink(
+      verificationToken
+    );
 
     try {
       await sendVerificationEmail({
@@ -61,23 +129,23 @@ export const registerUser = async (req, res) => {
         verificationLink,
       });
     } catch (emailError) {
-      console.error('Verification email failed:', emailError.message);
+      console.error(
+        'Verification email failed:',
+        emailError.response?.data || emailError.message
+      );
+
+      return res.status(503).json({
+        success: false,
+        accountCreated: true,
+        message:
+          'Your account was created, but the verification email could not be sent. Please try resending the verification email.',
+      });
     }
-
-    const token = generateToken(newUser._id);
-
-    // Set token as cookie
-    res.cookie('authToken', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
 
     return res.status(201).json({
       success: true,
-      message: 'User registered successfully. Please verify your email.',
-      token,
+      message:
+        'Registration successful! Please check your email and verify your account.',
       user: {
         _id: newUser._id,
         username: newUser.username,
@@ -86,16 +154,29 @@ export const registerUser = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error('Registration error:', error);
+
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: 'This email or username is already registered.',
+      });
+    }
+
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message: 'Unable to register your account. Please try again.',
     });
   }
 };
 
+// Verify email
 export const verifyEmail = async (req, res) => {
   try {
     const { token } = req.query;
+
+    const frontendUrl =
+      process.env.FRONTEND_URL || 'http://localhost:5173';
 
     if (!token) {
       return res.status(400).send(`
@@ -103,27 +184,27 @@ export const verifyEmail = async (req, res) => {
         <html>
           <head>
             <title>Email Verification</title>
-            <style>
-              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }
-              .card { max-width: 520px; margin: auto; padding: 30px; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-              .error { color: #b91c1c; }
-              .btn { display: inline-block; margin-top: 16px; padding: 10px 18px; text-decoration: none; background: #2563eb; color: white; border-radius: 8px; }
-            </style>
           </head>
-          <body>
-            <div class="card">
-              <h2 class="error">Verification Failed</h2>
-              <p>Verification token is required.</p>
-            </div>
+          <body style="font-family:Arial;text-align:center;padding:50px;">
+            <h2 style="color:#b91c1c;">Verification Failed</h2>
+            <p>Verification token is required.</p>
           </body>
         </html>
       `);
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secretkey');
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET || 'secretkey'
+    );
+
+    if (decoded.purpose !== 'verify-email') {
+      return res.status(400).send('Invalid verification token.');
+    }
 
     const user = await userModel.findOne({
       _id: decoded.id,
+      email: decoded.email,
       verificationToken: token,
       verificationTokenExpires: { $gt: Date.now() },
     });
@@ -134,17 +215,10 @@ export const verifyEmail = async (req, res) => {
         <html>
           <head>
             <title>Email Verification</title>
-            <style>
-              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }
-              .card { max-width: 520px; margin: auto; padding: 30px; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-              .error { color: #b91c1c; }
-            </style>
           </head>
-          <body>
-            <div class="card">
-              <h2 class="error">Verification Failed</h2>
-              <p>Invalid or expired verification token.</p>
-            </div>
+          <body style="font-family:Arial;text-align:center;padding:50px;">
+            <h2 style="color:#b91c1c;">Verification Failed</h2>
+            <p>Invalid or expired verification token.</p>
           </body>
         </html>
       `);
@@ -153,6 +227,7 @@ export const verifyEmail = async (req, res) => {
     user.verified = true;
     user.verificationToken = null;
     user.verificationTokenExpires = null;
+
     await user.save();
 
     return res.status(200).send(`
@@ -160,40 +235,38 @@ export const verifyEmail = async (req, res) => {
       <html>
         <head>
           <title>Email Verification</title>
-          <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }
-            .card { max-width: 520px; margin: auto; padding: 30px; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-            .success { color: #166534; }
-            .btn { display: inline-block; margin-top: 16px; padding: 10px 18px; text-decoration: none; background: #2563eb; color: white; border-radius: 8px; }
-          </style>
         </head>
-        <body>
-          <div class="card">
-            <h2 class="success">Email Verified Successfully</h2>
+        <body style="font-family:Arial;text-align:center;padding:50px;background:#f5f5f5;">
+          <div style="max-width:520px;margin:auto;padding:30px;background:white;border-radius:12px;">
+            <h2 style="color:#166534;">Email Verified Successfully</h2>
             <p>Your account has been verified. You can now log in.</p>
-            <a class="btn" href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/login">
-                 Go to Login
+            <a
+              href="${frontendUrl}/login"
+              style="display:inline-block;margin-top:16px;padding:10px 18px;text-decoration:none;background:#2563eb;color:white;border-radius:8px;"
+            >
+              Go to Login
             </a>
           </div>
         </body>
       </html>
     `);
   } catch (error) {
+    console.error('Email verification error:', error.message);
+
+    const frontendUrl =
+      process.env.FRONTEND_URL || 'http://localhost:5173';
+
     return res.status(400).send(`
       <!DOCTYPE html>
       <html>
         <head>
           <title>Email Verification</title>
-          <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }
-            .card { max-width: 520px; margin: auto; padding: 30px; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-            .error { color: #b91c1c; }
-          </style>
         </head>
-        <body>
-          <div class="card">
-            <h2 class="error">Verification Failed</h2>
-            <p>${error.message}</p>
+        <body style="font-family:Arial;text-align:center;padding:50px;background:#f5f5f5;">
+          <div style="max-width:520px;margin:auto;padding:30px;background:white;border-radius:12px;">
+            <h2 style="color:#b91c1c;">Verification Failed</h2>
+            <p>Your verification link is invalid or has expired.</p>
+            <a href="${frontendUrl}/login">Go to Login</a>
           </div>
         </body>
       </html>
@@ -201,16 +274,28 @@ export const verifyEmail = async (req, res) => {
   }
 };
 
+// Login user
 export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const user = await userModel.findOne({ email });
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and password are required.',
+      });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const user = await userModel.findOne({
+      email: normalizedEmail,
+    });
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found',
+        message: 'User not found.',
       });
     }
 
@@ -219,30 +304,29 @@ export const loginUser = async (req, res) => {
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials',
+        message: 'Invalid email or password.',
       });
     }
 
     if (!user.verified) {
       return res.status(403).json({
         success: false,
-        message: 'Please verify your email before logging in',
+        message: 'Please verify your email before logging in.',
       });
     }
 
     const token = generateToken(user._id);
 
-    // Set token as cookie
     res.cookie('authToken', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      sameSite: 'none',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
     return res.status(200).json({
       success: true,
-      message: 'Login successful',
+      message: 'Login successful.',
       token,
       user: {
         _id: user._id,
@@ -252,13 +336,16 @@ export const loginUser = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error('Login error:', error);
+
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message: 'Unable to login. Please try again.',
     });
   }
 };
 
+// Resend verification email
 export const resendVerificationEmail = async (req, res) => {
   try {
     const { email } = req.body;
@@ -266,33 +353,44 @@ export const resendVerificationEmail = async (req, res) => {
     if (!email) {
       return res.status(400).json({
         success: false,
-        message: 'Email is required',
+        message: 'Email is required.',
       });
     }
 
-    const user = await userModel.findOne({ email });
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const user = await userModel.findOne({
+      email: normalizedEmail,
+    });
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found',
+        message: 'User not found.',
       });
     }
 
     if (user.verified) {
       return res.status(400).json({
         success: false,
-        message: 'User is already verified',
+        message: 'This account is already verified.',
       });
     }
 
-    const verificationToken = generateVerificationToken(user._id, user.email);
+    const verificationToken = generateVerificationToken(
+      user._id,
+      user.email
+    );
+
     user.verificationToken = verificationToken;
-    user.verificationTokenExpires = Date.now() + 24 * 60 * 60 * 1000;
+    user.verificationTokenExpires =
+      Date.now() + 24 * 60 * 60 * 1000;
+
     await user.save();
 
-    const backendBaseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
-    const verificationLink = `${backendBaseUrl}/api/auth/verify-email?token=${verificationToken}`;
+    const verificationLink = createVerificationLink(
+      verificationToken
+    );
 
     await sendVerificationEmail({
       to: user.email,
@@ -302,16 +400,20 @@ export const resendVerificationEmail = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Verification email sent successfully',
+      message: 'Verification email sent successfully.',
     });
   } catch (error) {
+    console.error('Resend verification error:', error);
+
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message:
+        'Unable to send verification email. Please try again later.',
     });
   }
 };
 
+// Test email using Gmail API
 export const testEmail = async (req, res) => {
   try {
     const { to } = req.body;
@@ -319,65 +421,72 @@ export const testEmail = async (req, res) => {
     if (!to) {
       return res.status(400).json({
         success: false,
-        message: 'Recipient email is required',
+        message: 'Recipient email is required.',
       });
     }
 
-    const smtpStatus = await verifySMTPConnection();
+    const emailServiceReady = await verifySMTPConnection();
 
-    if (!smtpStatus) {
+    if (!emailServiceReady) {
       return res.status(503).json({
         success: false,
-        message: 'SMTP connection failed. Email service is not available.',
+        message: 'Gmail API configuration is incomplete.',
       });
     }
 
     const info = await sendEmail({
       to,
-      subject: 'Perplexity SMTP Test Email',
+      subject: 'Perplexity Gmail API Test Email',
       html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px;">
-          <h2>SMTP Test Successful</h2>
+        <div style="font-family:Arial,sans-serif;padding:20px;">
+          <h2>Gmail API Test Successful</h2>
           <p>This is a test email from your Perplexity backend.</p>
         </div>
       `,
-      text: 'SMTP test successful. This is a test email from your Perplexity backend.',
+      text: 'Gmail API test successful. This is a test email from your Perplexity backend.',
     });
 
     return res.status(200).json({
       success: true,
-      message: 'Test email sent successfully',
-      messageId: info.messageId,
-      smtpConnected: true,
+      message: 'Test email sent successfully.',
+      messageId: info.id,
+      emailServiceConnected: true,
     });
   } catch (error) {
+    console.error('Test email error:', error);
+
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message:
+        error.response?.data?.error?.message ||
+        error.message ||
+        'Unable to send test email.',
     });
   }
 };
 
+// Email service health check
 export const mailHealthCheck = async (req, res) => {
   try {
-    const smtpStatus = await verifySMTPConnection();
+    const emailServiceReady = await verifySMTPConnection();
 
-    return res.status(smtpStatus ? 200 : 503).json({
-      success: smtpStatus,
-      smtpConnected: smtpStatus,
-      message: smtpStatus
-        ? 'SMTP server is reachable and authenticated.'
-        : 'SMTP server is not reachable or authentication failed.',
+    return res.status(emailServiceReady ? 200 : 503).json({
+      success: emailServiceReady,
+      emailServiceConnected: emailServiceReady,
+      message: emailServiceReady
+        ? 'Gmail API configuration is available.'
+        : 'Gmail API configuration is incomplete.',
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
-      smtpConnected: false,
+      emailServiceConnected: false,
       message: error.message,
     });
   }
 };
 
+// Get logged-in user
 export const getMe = async (req, res) => {
   try {
     const user = await userModel.findById(req.userId);
@@ -385,7 +494,7 @@ export const getMe = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found',
+        message: 'User not found.',
       });
     }
 
@@ -399,9 +508,11 @@ export const getMe = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error('Get user error:', error);
+
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message: 'Unable to retrieve user information.',
     });
   }
 };
